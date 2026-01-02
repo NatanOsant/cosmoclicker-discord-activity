@@ -262,7 +262,7 @@
     </style>
 </head>
 <body>
-    <!-- Кнопка звука -->
+    <!-- Кнопка звука (ТЕПЕРЬ ОНА РАБОТАЕТ!) -->
     <div class="sound-control" id="soundToggle">
         <i class="fas fa-volume-up" id="soundIcon"></i>
     </div>
@@ -350,12 +350,32 @@
         </div>
     </div>
 
-    <!-- Звуковые эффекты -->
+    <!-- =============== ЗВУКОВЫЕ ФАЙЛЫ =============== -->
+    <!-- ЗВУК: Все аудио-теги для звуков игры -->
+    <!-- Ты сможешь заменить src на свои файлы -->
     <audio id="clickSound" preload="auto">
         <source src="https://assets.mixkit.co/sfx/preview/mixkit-select-click-1109.mp3" type="audio/mpeg">
+        <!-- ЗВУК: Основной звук клика (короткий) -->
     </audio>
     <audio id="buySound" preload="auto">
         <source src="https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3" type="audio/mpeg">
+        <!-- ЗВУК: Покупка улучшения (приятный "ding") -->
+    </audio>
+    <audio id="noEnergySound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-wrong-answer-fail-notification-946.mp3" type="audio/mpeg">
+        <!-- ЗВУК: Нет энергии (негативный звук) -->
+    </audio>
+    <audio id="energyFullSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3" type="audio/mpeg">
+        <!-- ЗВУК: Энергия восстановлена (позитивный) -->
+    </audio>
+    <audio id="generatorSound" preload="auto" volume="0.3">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-sci-fi-robot-notification-895.mp3" type="audio/mpeg">
+        <!-- ЗВУК: Работа генератора (механический звук) -->
+    </audio>
+    <audio id="bgMusic" preload="auto" loop volume="0.2">
+        <source src="https://assets.mixkit.co/music/preview/mixkit-game-show-suspense-waiting-667.mp3" type="audio/mpeg">
+        <!-- ЗВУК: Фоновая музыка (ambient) -->
     </audio>
 
     <script>
@@ -381,6 +401,22 @@
             energy: 200
         };
 
+        // ================== ЗВУКИ ==================
+        // ЗВУК: Объект со всеми звуковыми элементами
+        const sounds = {
+            click: document.getElementById('clickSound'),
+            buy: document.getElementById('buySound'),
+            noEnergy: document.getElementById('noEnergySound'),
+            energyFull: document.getElementById('energyFullSound'),
+            generator: document.getElementById('generatorSound'),
+            background: document.getElementById('bgMusic')
+        };
+
+        // ЗВУК: Флаг для отслеживания полной энергии
+        let wasEnergyFull = true;
+        // ЗВУК: Время последнего звука генератора
+        let lastGeneratorSound = 0;
+
         // ================== ЭЛЕМЕНТЫ ДОМ ==================
         const clickCounterEl = document.getElementById('clickCounter');
         const totalClicksEl = document.getElementById('totalClicks');
@@ -403,8 +439,6 @@
         const generatorCountEl = document.getElementById('generatorCount');
         const energyLevelEl = document.getElementById('energyLevel');
 
-        const clickSound = document.getElementById('clickSound');
-        const buySound = document.getElementById('buySound');
         const soundToggle = document.getElementById('soundToggle');
         const soundIcon = document.getElementById('soundIcon');
 
@@ -417,12 +451,34 @@
             setupEventListeners();
             startGameLoop();
             updateLeaderboard();
-            setInterval(updateLeaderboard, 30000); // Обновлять лидерборд каждые 30 сек
+            setInterval(updateLeaderboard, 30000);
+            
+            // ЗВУК: Автозапуск музыки при загрузке если звук включен
+            if (gameState.soundOn) {
+                sounds.background.volume = 0.2;
+                sounds.background.play().catch(e => {
+                    console.log("Автовоспроизведение заблокировано. Нажмите на страницу для запуска звука.");
+                    // ЗВУК: Добавляем обработчик для первого клика для разблокировки аудио
+                    document.addEventListener('click', function startAudio() {
+                        if (gameState.soundOn) {
+                            sounds.background.play();
+                        }
+                        document.removeEventListener('click', startAudio);
+                    }, { once: true });
+                });
+            }
         }
 
         // ================== ОСНОВНОЙ ГЕЙМПЛЕЙ ==================
         function click() {
-            if (gameState.energy <= 0) return;
+            // ЗВУК: Проверка энергии перед кликом
+            if (gameState.energy <= 0) {
+                if (gameState.soundOn) {
+                    sounds.noEnergy.currentTime = 0;
+                    sounds.noEnergy.play();
+                }
+                return;
+            }
 
             gameState.clicks += gameState.clickPower;
             gameState.totalClicks += gameState.clickPower;
@@ -435,10 +491,10 @@
             // Создаем летящую цифру
             createFlyingNumber(gameState.clickPower);
 
-            // Звук
+            // ЗВУК: Воспроизведение звука клика
             if (gameState.soundOn) {
-                clickSound.currentTime = 0;
-                clickSound.play();
+                sounds.click.currentTime = 0;
+                sounds.click.play();
             }
 
             updateUI();
@@ -470,9 +526,10 @@
                     break;
             }
 
+            // ЗВУК: Звук покупки улучшения
             if (gameState.soundOn) {
-                buySound.currentTime = 0;
-                buySound.play();
+                sounds.buy.currentTime = 0;
+                sounds.buy.play();
             }
 
             updateUI();
@@ -492,6 +549,29 @@
                 // Восстановление энергии
                 if (gameState.energy < gameState.maxEnergy) {
                     gameState.energy = Math.min(gameState.maxEnergy, gameState.energy + 5);
+                    
+                    // ЗВУК: Проверка полного восстановления энергии
+                    if (gameState.energy >= gameState.maxEnergy && !wasEnergyFull) {
+                        wasEnergyFull = true;
+                        if (gameState.soundOn) {
+                            sounds.energyFull.currentTime = 0;
+                            sounds.energyFull.play();
+                        }
+                    }
+                } else if (gameState.energy < gameState.maxEnergy) {
+                    wasEnergyFull = false;
+                }
+
+                // ЗВУК: Случайные звуки генератора
+                if (gameState.generators > 0 && gameState.energy < gameState.maxEnergy && gameState.soundOn) {
+                    const now = Date.now();
+                    // Звук каждые 2-5 секунд на каждый генератор
+                    if (now - lastGeneratorSound > 2000 + Math.random() * 3000) {
+                        sounds.generator.currentTime = 0;
+                        sounds.generator.volume = 0.2 + (Math.random() * 0.3);
+                        sounds.generator.play();
+                        lastGeneratorSound = now;
+                    }
                 }
 
                 // Расчет кликов в секунду
@@ -506,10 +586,8 @@
 
         // ================== ПСЕВДО-МУЛЬТИПЛЕЕР ==================
         function updateLeaderboard() {
-            // Получаем "игроков" из локального хранилища или создаем случайных
             let players = JSON.parse(localStorage.getItem('cosmoClicker_players')) || [];
 
-            // Если данных мало, добавляем случайных ботов
             if (players.length < 5) {
                 const botNames = ['Космонавт_Алекс', 'Звездочёт', 'Галактика_Х', 'Робот_Кликер', 'Новичок_2024', 'Про_Игрок', 'Инопланетянин'];
                 for (let i = players.length; i < 5; i++) {
@@ -521,13 +599,12 @@
                 }
             }
 
-            // Добавляем текущего игрока (реального)
             const currentPlayer = {
                 name: 'Вы',
                 score: gameState.totalClicks,
                 isBot: false
             };
-            // Ищем себя в списке, если есть - обновляем, если нет - добавляем
+            
             const existingIndex = players.findIndex(p => p.name === 'Вы');
             if (existingIndex >= 0) {
                 players[existingIndex] = currentPlayer;
@@ -535,16 +612,10 @@
                 players.push(currentPlayer);
             }
 
-            // Сортируем по очкам
             players.sort((a, b) => b.score - a.score);
-
-            // Ограничиваем топ-7
             players = players.slice(0, 7);
 
-            // Сохраняем обратно
             localStorage.setItem('cosmoClicker_players', JSON.stringify(players));
-
-            // Отрисовываем
             renderLeaderboard(players);
         }
 
@@ -582,7 +653,6 @@
 
             clickButton.appendChild(flyingNumber);
 
-            // Анимация полета
             let pos = 50;
             const flyInterval = setInterval(() => {
                 pos -= 1;
@@ -609,25 +679,20 @@
             energyValueEl.textContent = Math.floor(gameState.energy) + ' / ' + gameState.maxEnergy;
             energyBarEl.style.width = (gameState.energy / gameState.maxEnergy * 100) + '%';
 
-            // Цены улучшений
             clickPowerCostEl.textContent = formatNumber(upgradeCosts.clickPower);
             generatorCostEl.textContent = formatNumber(upgradeCosts.generator);
             energyCostEl.textContent = formatNumber(upgradeCosts.energy);
 
-            // Уровни улучшений
             clickPowerLevelEl.textContent = gameState.clickPowerLevel;
             generatorCountEl.textContent = gameState.generators;
             energyLevelEl.textContent = gameState.energyLevel;
 
-            // Время игры
             const minutes = Math.floor(gameState.playTimeSeconds / 60);
             const seconds = gameState.playTimeSeconds % 60;
             playTimeEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-            // Затемняем кнопку, если нет энергии
             clickButton.style.opacity = gameState.energy > 0 ? '1' : '0.7';
 
-            // Подсвечиваем доступные улучшения
             const upgrades = [
                 { el: clickPowerUpgrade, cost: upgradeCosts.clickPower },
                 { el: generatorUpgrade, cost: upgradeCosts.generator },
@@ -648,14 +713,23 @@
             generatorUpgrade.addEventListener('click', () => buyUpgrade('generator'));
             energyUpgrade.addEventListener('click', () => buyUpgrade('energy'));
 
-            // Управление звуком
+            // ЗВУК: Управление звуком с музыкой
             soundToggle.addEventListener('click', () => {
                 gameState.soundOn = !gameState.soundOn;
                 soundIcon.className = gameState.soundOn ? 'fas fa-volume-up' : 'fas fa-volume-mute';
+                
+                if (gameState.soundOn) {
+                    // Включаем все звуки
+                    sounds.background.play().catch(e => console.log("Не удалось запустить музыку"));
+                } else {
+                    // Выключаем все звуки
+                    sounds.background.pause();
+                    sounds.background.currentTime = 0;
+                }
+                
                 localStorage.setItem('cosmoClicker_sound', gameState.soundOn);
             });
 
-            // Сохраняем при закрытии вкладки
             window.addEventListener('beforeunload', saveGame);
         }
 
